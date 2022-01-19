@@ -2,6 +2,7 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv   #for python-dotenv method
 from flask import Flask, render_template, request, redirect, url_for
+from flask_mail import Mail, Message
 from flask_sqlalchemy import SQLAlchemy
 
 
@@ -9,11 +10,17 @@ load_dotenv()
 
 app = Flask(__name__)
 
-dbName = 'blog.db' 
+app.config['MAIL_SERVER'] = 'smtp.gmail.com' 
+app.config['MAIL_PORT'] = 465
+app.config['MAIL_USERNAME'] = os.environ.get('USER')
+app.config['MAIL_PASSWORD'] = os.environ.get('PASSWORD')
+app.config['MAIL_USE_TLS'] = False
+app.config['MAIL_USE_SSL'] = True
+mail = Mail(app)
+
 
 #for securing cookies and session data + creating database
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('SQLALCHEMY_DATABASE_URI')
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://///Users/nahomalem/Documents/Current projects/Loics website.blog.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False #this supresses event system warning
 
 db = SQLAlchemy(app)
@@ -25,21 +32,25 @@ class Blogpost(db.Model):
     date_posted = db.Column(db.DateTime)
     content = db.Column(db.Text)
 
+#Ensures that blogpost table database is created before any requests
+@app.before_first_request
+def create_tables():
+    db.create_all()
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    posts = Blogpost.query.order_by(Blogpost.date_posted.desc()).all()
+    return render_template('index.html', posts=posts)
 
 @app.route('/about')
 def about():
     return render_template('about.html')
 
-@app.route('/post')
-def post():
-    return render_template('post.html')
-
-@app.route('/contact')
-def contact():
-    return render_template('contact.html')
+@app.route('/post/<int:post_id>')
+def post(post_id):
+    post = Blogpost.query.filter_by(id=post_id).one()
+    date_posted = post.date_posted.strftime('%d, %B, %Y')
+    return render_template('post.html', post=post)
 
 @app.route('/add')
 def add():
@@ -58,6 +69,17 @@ def addpost():
     db.session.commit()
 
     return redirect(url_for('index'))
+
+@app.route("/email")
+def email():
+   msg = Message('Hello', sender = app.config.get('MAIL_USERNAME'), recipients = ['MAIL_USERNAME'])
+   msg.body = "Hello Flask message sent from Flask-Mail"
+   mail.send(msg)
+   return "Sent"
+
+@app.route('/contact')
+def contact():
+    return render_template('contact.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
